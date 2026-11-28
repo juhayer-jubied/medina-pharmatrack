@@ -1,10 +1,24 @@
 export type UserRole = 'Company' | 'Pharmacy' | 'DGDA Regulator';
 
-export type DrugGroup = 'Antibiotics' | 'Painkillers' | 'Antacids' | 'Paracetamol';
+export type DrugGroup =
+  | 'Antibiotics'
+  | 'Painkillers'
+  | 'Antacids'
+  | 'Paracetamol'
+  | 'Antidiabetics'
+  | 'Antihypertensives'
+  | 'Antihistamines'
+  | 'Vitamins & Supplements'
+  | 'Cardiovascular'
+  | 'Respiratory'
+  | 'Antifungals'
+  | 'Gastrointestinal';
 
 export type PharmacyArea = 'Daffodil' | 'Mirpur' | 'Uttara';
 
 export type BatchStatus = 'AUTHENTIC' | 'EXPIRED' | 'RECALLED' | 'UNVERIFIED';
+
+export type BatchApprovalStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 
 export type ComplaintIssueType =
   | 'Counterfeit Medicine'
@@ -15,14 +29,67 @@ export type ComplaintIssueType =
 
 export type ComplaintStatus = 'Pending' | 'Resolved' | 'Dismissed';
 
-// Matches C++ DRUG_GROUPS[4] = {"Antibiotics", "Painkillers", "Antacids", "Paracetamol"}
-// so groupChoice 1..4 aligns directly with G1..G4 in Batch Numbers.
+export type NotificationTargetType =
+  | 'PUBLIC'
+  | 'ALL_COMPANIES'
+  | 'ALL_PHARMACIES'
+  | 'INDIVIDUAL'
+  | 'EVERYONE';
+
+export type NotificationCategory =
+  | 'Law & Regulation'
+  | 'Urgent Alert'
+  | 'General Notice';
+
+export const NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = [
+  'Law & Regulation',
+  'Urgent Alert',
+  'General Notice',
+] as const;
+
+export interface NotificationRecord {
+  notificationId: string;
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  targetType: NotificationTargetType;
+  targetRole?: 'Company' | 'Pharmacy';
+  targetEntityId?: string;
+  targetEntityName?: string;
+  sentBy: string;
+  readBy: string[];
+  createdAt: string;
+}
+
 export const DRUG_GROUPS: readonly DrugGroup[] = [
   'Antibiotics',
   'Painkillers',
   'Antacids',
   'Paracetamol',
+  'Antidiabetics',
+  'Antihypertensives',
+  'Antihistamines',
+  'Vitamins & Supplements',
+  'Cardiovascular',
+  'Respiratory',
+  'Antifungals',
+  'Gastrointestinal',
 ] as const;
+
+export const DRUG_GROUP_CODES: Record<DrugGroup, string> = {
+  Antibiotics: 'ATB',
+  Painkillers: 'PNK',
+  Antacids: 'ATC',
+  Paracetamol: 'PCM',
+  Antidiabetics: 'ATD',
+  Antihypertensives: 'AHT',
+  Antihistamines: 'AHM',
+  'Vitamins & Supplements': 'VTM',
+  Cardiovascular: 'CRD',
+  Respiratory: 'RSP',
+  Antifungals: 'ATF',
+  Gastrointestinal: 'GST',
+};
 
 export const PHARMACY_AREAS: readonly PharmacyArea[] = [
   'Daffodil',
@@ -38,6 +105,8 @@ export const COMPLAINT_ISSUE_TYPES: readonly ComplaintIssueType[] = [
   'Other',
 ] as const;
 
+export type PharmacyApprovalStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+
 export interface PublicUser {
   id: string;
   organizationName: string;
@@ -50,6 +119,10 @@ export interface PublicUser {
   address?: string;
   contact?: string;
   googleMapsUrl?: string;
+  approvalStatus?: PharmacyApprovalStatus;
+  approvalRemarks?: string;
+  approvedBy?: string;
+  approvedAt?: string;
   createdAt: string;
 }
 
@@ -67,6 +140,10 @@ export interface ProductionBatch {
   recallReason?: string;
   recalledBy?: string;
   recalledAt?: string;
+  approvalStatus: BatchApprovalStatus; // DGDA approval status
+  approvalRemarks?: string;
+  approvedBy?: string;
+  approvedAt?: string;
   createdAt: string;
 }
 
@@ -149,9 +226,8 @@ export function validateBatchDates(
   return { valid: true };
 }
 
-export function getDrugGroupNumber(drugGroup: DrugGroup): number {
-  const index = DRUG_GROUPS.indexOf(drugGroup);
-  return index >= 0 ? index + 1 : 4;
+export function getDrugGroupCode(drugGroup: DrugGroup): string {
+  return DRUG_GROUP_CODES[drugGroup] ?? 'GEN';
 }
 
 export function extractMMYYFromDate(dateStr: string): string {
@@ -219,12 +295,12 @@ export function generateBatchId(params: {
   customPrefix?: string;
   existingBatchIds?: Iterable<string>;
 }): string {
-  const { compPrefix, companySuffix } = resolveCompanyBatchCodes(
+  const { compPrefix } = resolveCompanyBatchCodes(
     params.entityId,
     params.companyOrdinal ?? 1,
     params.customPrefix
   );
-  const groupChoice = getDrugGroupNumber(params.drugGroup);
+  const groupCode = getDrugGroupCode(params.drugGroup);
   const expCode = extractMMYYFromDate(params.expiryDate);
   const existing = new Set(
     Array.from(params.existingBatchIds ?? [], (id) => id.toUpperCase())
@@ -232,8 +308,8 @@ export function generateBatchId(params: {
 
   let count = Math.max(1, params.companyProductionCount + 1);
   while (true) {
-    const prodIdCode = `P${String(count).padStart(2, '0')}${companySuffix}`;
-    const candidate = `${compPrefix}-G${groupChoice}-${prodIdCode}-${expCode}`;
+    const prodIdCode = `P${String(count).padStart(3, '0')}`;
+    const candidate = `${compPrefix}-${groupCode}-${prodIdCode}-${expCode}`;
     if (!existing.has(candidate)) {
       return candidate;
     }
@@ -377,11 +453,14 @@ export function isLowStock(remainingQty: number): boolean {
 
 export function extractBatchIdsFromText(text: string): string[] {
   const upper = text.toUpperCase();
-  const cppMatches = upper.match(/[A-Z]{2,5}-G[1-4]-P\d{2,}[A-Z0-9]-\d{4}/g) ?? [];
+  const standardMatches =
+    upper.match(/[A-Z]{2,5}-(?:[A-Z]{3}|G\d{1,2})-P\d{2,}[A-Z0-9]?-\d{4}/g) ?? [];
   const legacyMatches = upper.match(/BATCH-\d{4}-\d{4}/g) ?? [];
-  return Array.from(new Set([...cppMatches, ...legacyMatches]));
+  return Array.from(new Set([...standardMatches, ...legacyMatches]));
 }
 
 export function isValidStandardBatchFormat(batchId: string): boolean {
-  return /^[A-Z]{2,5}-G[1-4]-P\d{2,}[A-Z0-9]-\d{4}$/.test(batchId.trim().toUpperCase());
+  return /^[A-Z]{2,5}-(?:[A-Z]{3}|G\d{1,2})-P\d{2,}[A-Z0-9]?-\d{4}$/.test(
+    batchId.trim().toUpperCase()
+  );
 }

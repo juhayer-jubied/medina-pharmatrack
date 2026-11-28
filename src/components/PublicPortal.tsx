@@ -5,6 +5,7 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardCheck,
+  Clock,
   ExternalLink,
   Factory,
   FileWarning,
@@ -34,6 +35,7 @@ import {
   type ComplaintRecord,
 } from '../lib/pharmaLogic';
 import {
+  BatchApprovalStatusBadge,
   BatchStatusBadge,
   ComplaintStatusBadge,
   MonoIdBadge,
@@ -63,6 +65,8 @@ export function PublicPortal({
 
   // Stock finder state
   const [selectedGroup, setSelectedGroup] = useState<string>('All');
+  const [medicineSearchInput, setMedicineSearchInput] = useState('');
+  const [stockViewMode, setStockViewMode] = useState<'grouped' | 'table'>('grouped');
   const [stockItems, setStockItems] = useState<PublicStockItem[]>([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
@@ -92,7 +96,7 @@ export function PublicPortal({
 
   useEffect(() => {
     if (activeTab === 'stock') {
-      void loadStock(selectedGroup);
+      void loadStock(selectedGroup, medicineSearchInput);
     } else if (activeTab === 'near-me') {
       void loadPharmacies(selectedArea);
     } else if (activeTab === 'profiles') {
@@ -100,13 +104,13 @@ export function PublicPortal({
     } else if (activeTab === 'report') {
       void loadAllPharmaciesForReport();
     }
-  }, [activeTab, selectedGroup, selectedArea]);
+  }, [activeTab, selectedGroup, medicineSearchInput, selectedArea]);
 
-  async function loadStock(group: string) {
+  async function loadStock(group: string, medQuery: string = '') {
     setStockLoading(true);
     setStockError(null);
     try {
-      const data = await api.getPublicStock(group);
+      const data = await api.getPublicStock(group, medQuery);
       setStockItems(data.items);
     } catch (err) {
       setStockError(err instanceof Error ? err.message : 'Unable to load medicine stock.');
@@ -292,7 +296,7 @@ export function PublicPortal({
             <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
               Enter a standardized Batch Number (e.g.,{' '}
               <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-800">
-                CPA-G1-P01A-1028
+                CPA-ATB-P001-1028
               </span>
               ) to confirm manufacturer provenance, expiry validity, DGDA recall status, and live pharmacy stock.
             </p>
@@ -311,7 +315,7 @@ export function PublicPortal({
                   required
                   value={batchIdInput}
                   onChange={(e) => setBatchIdInput(e.target.value.toUpperCase())}
-                  placeholder="Batch Number (e.g., CPA-G1-P01A-1028)"
+                  placeholder="Batch Number (e.g., CPA-ATB-P001-1028)"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3.5 font-mono text-sm sm:text-base text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
                 />
               </div>
@@ -376,7 +380,63 @@ export function PublicPortal({
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {verification.status === 'AUTHENTIC' ? (
+                  {verification.batch.approvalStatus === 'PENDING_APPROVAL' ? (
+                    <div
+                      role="alert"
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/90 p-5 text-amber-950"
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                          <Clock className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <span className="text-base font-semibold tracking-tight text-amber-950">
+                              এই ওষুধ এখনো ডিজিডিএ থেকে এপ্রুভাল পেন্ডিং (DGDA Approval Pending)
+                            </span>
+                            <BatchApprovalStatusBadge status="PENDING_APPROVAL" />
+                          </div>
+                          <p className="mt-1 text-sm text-amber-900 leading-relaxed">
+                            এই ওষুধ ব্যাচটি এখনও ডিজিডিএ (DGDA) রেগুলেটরি বডি কর্তৃক অনুমোদিত হয়নি। অনুমোদন পাওয়ার পূর্ব পর্যন্ত এই ওষুধ বাজারজাত, ফার্মেসি থেকে বিক্রয় বা সেবন সম্পূর্ণ নিষিদ্ধ।
+                          </p>
+                          {verification.batch.approvalRemarks && (
+                            <div className="mt-2 text-xs text-amber-800 font-mono bg-amber-100/70 border border-amber-200/60 rounded-lg px-2.5 py-1">
+                              DGDA Status: {verification.batch.approvalRemarks}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <MonoIdBadge>{verification.batch.batchId}</MonoIdBadge>
+                    </div>
+                  ) : verification.batch.approvalStatus === 'REJECTED' ? (
+                    <div
+                      role="alert"
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50/90 p-5 text-rose-950"
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+                          <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <span className="text-base font-semibold tracking-tight text-rose-950">
+                              ডিজিডিএ এপ্রুভাল রিজেক্টেড (DGDA Approval Rejected)
+                            </span>
+                            <BatchApprovalStatusBadge status="REJECTED" />
+                          </div>
+                          <p className="mt-1 text-sm text-rose-900 leading-relaxed">
+                            ডিজিডিএ (DGDA) কর্তৃপক্ষ এই ওষুধ ব্যাচটির অনুমোদন বাতিল/রিজেক্ট করেছে। এই ওষুধ বিক্রয়, সরবরাহ বা সেবন আইনত নিষিদ্ধ।
+                          </p>
+                          {verification.batch.approvalRemarks && (
+                            <div className="mt-2 text-xs text-rose-800 font-mono bg-rose-100/70 border border-rose-200/60 rounded-lg px-2.5 py-1">
+                              DGDA Rejection Reason: {verification.batch.approvalRemarks}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <MonoIdBadge>{verification.batch.batchId}</MonoIdBadge>
+                    </div>
+                  ) : verification.status === 'AUTHENTIC' ? (
                     <div
                       role="status"
                       className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/85 p-5 text-emerald-950"
@@ -391,9 +451,10 @@ export function PublicPortal({
                               Verified Authentic Medicine Batch
                             </span>
                             <BatchStatusBadge status={verification.status} />
+                            <BatchApprovalStatusBadge status={verification.batch.approvalStatus || 'APPROVED'} />
                           </div>
                           <p className="mt-1 text-sm text-emerald-800">
-                            Registered production provenance confirmed. Valid through{' '}
+                            Registered production provenance and DGDA market approval confirmed. Valid through{' '}
                             <span className="font-mono font-semibold tabular-nums">
                               {verification.batch.expiryDate}
                             </span>{' '}
@@ -433,7 +494,7 @@ export function PublicPortal({
                     </div>
                   )}
 
-                  {/* Structured 2x3 Provenance Grid */}
+                  {/* Structured Provenance Grid */}
                   <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4">
                       <dt className="flex items-center gap-2 text-xs font-medium text-slate-500">
@@ -495,6 +556,21 @@ export function PublicPortal({
                       </dt>
                       <dd className="mt-1.5 font-mono text-sm font-semibold text-slate-900 tabular-nums">
                         {verification.batch.expiryDate}
+                      </dd>
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <dt className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <ShieldCheck className="h-3.5 w-3.5 text-[#0F766E]" aria-hidden="true" />
+                        DGDA Regulatory Clearance
+                      </dt>
+                      <dd className="flex items-center gap-2 text-xs">
+                        <BatchApprovalStatusBadge status={verification.batch.approvalStatus || 'PENDING_APPROVAL'} />
+                        {verification.batch.approvalRemarks && (
+                          <span className="text-slate-600 font-normal">
+                            ({verification.batch.approvalRemarks})
+                          </span>
+                        )}
                       </dd>
                     </div>
                   </dl>
@@ -566,7 +642,7 @@ export function PublicPortal({
                 Search Medicine Availability
               </h2>
               <p className="mt-0.5 text-sm text-slate-500">
-                Live, non-expired, non-recalled inventory across all registered pharmacies by drug group.
+                Live, DGDA-approved inventory across all registered pharmacies. Search by medicine name to see which pharmacies have stock.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -587,6 +663,54 @@ export function PublicPortal({
             </div>
           </div>
 
+          {/* Search Medicine by Name Bar */}
+          <div className="mt-5 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden="true" />
+              <input
+                type="text"
+                value={medicineSearchInput}
+                onChange={(e) => setMedicineSearchInput(e.target.value)}
+                placeholder="Search medicine by name (e.g., Napa, Seclo, Cipro, Paracetamol...)"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/60 pl-10 pr-10 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
+              />
+              {medicineSearchInput && (
+                <button
+                  type="button"
+                  onClick={() => setMedicineSearchInput('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 hover:text-slate-600"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setStockViewMode('grouped')}
+                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all whitespace-nowrap ${
+                  stockViewMode === 'grouped'
+                    ? 'bg-[#0F766E] text-white shadow-xs'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Pharmacy Stock View
+              </button>
+              <button
+                type="button"
+                onClick={() => setStockViewMode('table')}
+                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all whitespace-nowrap ${
+                  stockViewMode === 'table'
+                    ? 'bg-[#0F766E] text-white shadow-xs'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Table Ledger
+              </button>
+            </div>
+          </div>
+
           {stockError && (
             <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
               {stockError}
@@ -600,20 +724,160 @@ export function PublicPortal({
           ) : stockItems.length === 0 ? (
             <div className="py-14 text-center">
               <p className="text-sm font-semibold text-slate-900">
-                No active medicine stock found
+                {medicineSearchInput ? `No pharmacies found with "${medicineSearchInput}" in stock` : 'No active medicine stock found'}
               </p>
               <p className="mt-1.5 text-sm text-slate-500 max-w-md mx-auto">
-                Stock will appear here once a registered company dispatches an active batch to a licensed pharmacy.
+                {medicineSearchInput
+                  ? 'Try searching for another medicine name or check back once partner pharmacies receive new stock.'
+                  : 'Stock will appear here once a registered company dispatches an active batch to a licensed pharmacy.'}
               </p>
-              <button
-                type="button"
-                onClick={() => onOpenAuth('register')}
-                className="mt-5 inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-teal-300 transition-all"
-              >
-                Register Partner Account
-              </button>
+              {medicineSearchInput && (
+                <button
+                  type="button"
+                  onClick={() => setMedicineSearchInput('')}
+                  className="mt-4 inline-flex items-center rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-all"
+                >
+                  Clear search filter
+                </button>
+              )}
+            </div>
+          ) : stockViewMode === 'grouped' ? (
+            /* Grouped View: Medicine -> Available Pharmacies */
+            <div className="mt-6 space-y-5">
+              {Object.values(
+                stockItems.reduce<
+                  Record<
+                    string,
+                    {
+                      medicineName: string;
+                      drugGroup: string;
+                      manufacturerName: string;
+                      unitPrice: number;
+                      totalAvailable: number;
+                      pharmacies: Array<{
+                        pharmacyId: string;
+                        pharmacyName: string;
+                        area: string;
+                        address: string;
+                        contact: string;
+                        availableStock: number;
+                        batchId: string;
+                        expiryDate: string;
+                      }>;
+                    }
+                  >
+                >((acc, item) => {
+                  const key = item.medicineName.trim().toLowerCase();
+                  if (!acc[key]) {
+                    acc[key] = {
+                      medicineName: item.medicineName,
+                      drugGroup: item.drugGroup,
+                      manufacturerName: item.manufacturerName,
+                      unitPrice: item.unitPrice,
+                      totalAvailable: 0,
+                      pharmacies: [],
+                    };
+                  }
+                  acc[key].totalAvailable += item.availableStock;
+                  acc[key].pharmacies.push({
+                    pharmacyId: item.pharmacyId,
+                    pharmacyName: item.pharmacyName,
+                    area: item.area,
+                    address: item.address,
+                    contact: item.contact,
+                    availableStock: item.availableStock,
+                    batchId: item.batchId,
+                    expiryDate: item.expiryDate,
+                  });
+                  return acc;
+                }, {})
+              ).map((med) => (
+                <div
+                  key={med.medicineName}
+                  className="rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xs hover:border-teal-300 transition-all"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h3 className="text-lg font-semibold tracking-tight text-slate-900">
+                          {med.medicineName}
+                        </h3>
+                        <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-[#0F766E]">
+                          {med.drugGroup}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Manufacturer: <span className="font-medium text-slate-700">{med.manufacturerName}</span> · MRP Price:{' '}
+                        <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                          ৳{med.unitPrice.toFixed(2)}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="sm:text-right">
+                      <span className="text-xs text-slate-500 block">Available In Stock At</span>
+                      <span className="font-semibold text-sm text-[#0F766E]">
+                        {med.pharmacies.length} {med.pharmacies.length === 1 ? 'Pharmacy' : 'Pharmacies'} ({med.totalAvailable.toLocaleString()} pcs total)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+                      Available Pharmacies ({med.pharmacies.length}):
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                      {med.pharmacies.map((pharm) => (
+                        <div
+                          key={`${pharm.pharmacyId}-${pharm.batchId}`}
+                          className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 flex flex-col justify-between hover:bg-white hover:border-teal-300 transition-all"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h5 className="font-semibold text-sm text-slate-900">
+                                  {pharm.pharmacyName}
+                                </h5>
+                                <span className="font-mono text-xs text-slate-500">
+                                  License: {pharm.pharmacyId}
+                                </span>
+                              </div>
+                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-mono text-xs font-bold text-emerald-700 tabular-nums whitespace-nowrap">
+                                {pharm.availableStock} pcs
+                              </span>
+                            </div>
+
+                            <div className="mt-2.5 text-xs text-slate-600 space-y-1">
+                              <div className="flex items-center gap-1.5 text-slate-600">
+                                <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                                <span>{pharm.area} · {pharm.address}</span>
+                              </div>
+                              {pharm.contact && (
+                                <div className="flex items-center gap-1.5 text-slate-600">
+                                  <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                                  <a
+                                    href={`tel:${pharm.contact}`}
+                                    className="font-mono hover:text-[#0F766E] transition-colors"
+                                  >
+                                    {pharm.contact}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-3.5 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="font-mono">Batch: {pharm.batchId}</span>
+                            <span>Exp: {pharm.expiryDate}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
+            /* Table View */
             <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200/80">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -959,7 +1223,7 @@ export function PublicPortal({
                     type="text"
                     value={reportBatchId}
                     onChange={(e) => setReportBatchId(e.target.value.toUpperCase())}
-                    placeholder="CPA-G1-P01A-1028"
+                    placeholder="CPA-ATB-P001-1028"
                     className={`${inputFieldClass} font-mono placeholder:font-sans`}
                   />
                 </div>

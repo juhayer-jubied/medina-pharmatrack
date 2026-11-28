@@ -23,7 +23,7 @@ import {
 } from '../lib/pharmaLogic';
 import { DashboardShell, type SidebarNavItem } from './DashboardShell';
 import { SlideOverDrawer } from './SlideOverDrawer';
-import { BatchStatusBadge, MonoIdBadge } from './StatusBadge';
+import { BatchApprovalStatusBadge, BatchStatusBadge, MonoIdBadge } from './StatusBadge';
 
 interface ManufacturerDashboardProps {
   user: PublicUser;
@@ -252,24 +252,22 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
       {createdBatch && (
         <div
           role="status"
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-5 py-4 text-sm text-emerald-950"
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/90 px-5 py-4 text-sm text-teal-950"
         >
           <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="h-5 w-5 text-emerald-700 shrink-0" aria-hidden="true" />
-            <span>
-              Production batch registered with ID{' '}
-              <span className="font-mono font-bold">{createdBatch.batchId}</span> (
-              {createdBatch.medicineName}).
-            </span>
+            <CheckCircle2 className="h-5 w-5 text-[#0F766E] shrink-0" aria-hidden="true" />
+            <div>
+              <div className="font-semibold text-slate-900">
+                Production batch <span className="font-mono">{createdBatch.batchId}</span> ({createdBatch.medicineName}) registered!
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Automatically submitted to DGDA Regulator for compliance approval. Once approved, you can dispatch stock to pharmacies.
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => openDispatchDrawer(createdBatch.batchId)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 transition-colors whitespace-nowrap"
-          >
-            <Send className="h-3.5 w-3.5" aria-hidden="true" />
-            Dispatch Now
-          </button>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 whitespace-nowrap self-start sm:self-auto">
+            Pending DGDA Approval
+          </span>
         </div>
       )}
 
@@ -282,7 +280,7 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
                 Manufactured Batches
               </h2>
               <p className="text-sm text-slate-500">
-                Live production ledger and remaining factory inventory.
+                Live production ledger, DGDA regulatory approval status, and factory inventory.
               </p>
             </div>
             <button
@@ -301,7 +299,7 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
             <div className="py-12 text-center">
               <p className="text-sm font-medium text-slate-900">No batches manufactured yet</p>
               <p className="mt-1 text-sm text-slate-500">
-                Register your first production batch to generate a standardized Batch ID.
+                Register your first production batch to generate a standardized Batch ID and submit to DGDA.
               </p>
               <button
                 type="button"
@@ -322,14 +320,19 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
                     <th className="py-3 px-2.5 text-right">Factory Stock</th>
                     <th className="py-3 px-2.5 text-right">Price</th>
                     <th className="py-3 px-2.5">Mfg / Expiry</th>
+                    <th className="py-3 px-2.5">DGDA Approval</th>
                     <th className="py-3 px-2.5">Status</th>
                     <th className="py-3 px-2.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {batches.map((b) => {
+                    const isApproved = b.approvalStatus === 'APPROVED';
                     const canDispatch =
-                      b.status === 'AUTHENTIC' && b.remainingQty > 0 && pharmacies.length > 0;
+                      isApproved &&
+                      b.status === 'AUTHENTIC' &&
+                      b.remainingQty > 0 &&
+                      pharmacies.length > 0;
                     return (
                       <tr
                         key={b.batchId}
@@ -358,6 +361,14 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
                           <div className="text-slate-400">Exp {b.expiryDate}</div>
                         </td>
                         <td className="py-3 px-2.5 whitespace-nowrap">
+                          <BatchApprovalStatusBadge status={b.approvalStatus} />
+                          {b.approvalRemarks && (
+                            <div className="mt-0.5 max-w-[160px] truncate text-[11px] text-slate-400">
+                              {b.approvalRemarks}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-2.5 whitespace-nowrap">
                           <BatchStatusBadge status={b.status} />
                         </td>
                         <td className="py-3 px-2.5 text-right whitespace-nowrap">
@@ -365,10 +376,21 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
                             type="button"
                             disabled={!canDispatch}
                             onClick={() => openDispatchDrawer(b.batchId)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-teal-300 disabled:opacity-40 transition-all"
+                            title={
+                              !isApproved
+                                ? 'DGDA approval required before dispatching'
+                                : b.remainingQty <= 0
+                                ? 'No remaining factory stock'
+                                : undefined
+                            }
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-all ${
+                              canDispatch
+                                ? 'border-teal-200 bg-teal-50 text-[#0F766E] hover:bg-teal-100 hover:border-teal-300'
+                                : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed opacity-60'
+                            }`}
                           >
                             <Send className="h-3 w-3" aria-hidden="true" />
-                            Dispatch
+                            {isApproved ? 'Dispatch' : 'Awaiting DGDA'}
                           </button>
                         </td>
                       </tr>
@@ -502,7 +524,7 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
         open={drawerMode === 'batch'}
         onClose={() => setDrawerMode(null)}
         title="Register New Production Batch"
-        subtitle="Generates a C++ PharmaTrack Batch Number (e.g., CPA-G1-P01A-1028)."
+        subtitle="Generates a C++ PharmaTrack Batch Number (e.g., CPA-ATB-P001-1028)."
       >
         {createdBatch && (
           <div
@@ -671,122 +693,153 @@ export function ManufacturerDashboard({ user }: ManufacturerDashboardProps) {
           </div>
         )}
 
-        <form onSubmit={handleDispatch} className="space-y-4">
-          <div>
-            <label htmlFor="disp-batch" className="block text-sm font-medium text-slate-700 mb-1.5">
-              Production Batch
-            </label>
-            {batches.length > 0 ? (
-              <select
-                id="disp-batch"
-                required
-                value={dispatchBatchId}
-                onChange={(e) => setDispatchBatchId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select a batch...</option>
-                {batches.map((b) => (
-                  <option key={b.batchId} value={b.batchId}>
-                    {b.batchId} — {b.medicineName} ({b.remainingQty} pcs left, {b.status})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="disp-batch"
-                type="text"
-                required
-                value={dispatchBatchId}
-                onChange={(e) => setDispatchBatchId(e.target.value.toUpperCase())}
-                placeholder="Register a batch first"
-                className={`${inputClass} bg-slate-50 font-mono`}
-              />
-            )}
-          </div>
+        {(() => {
+          const selectedDispatchBatch = batches.find(
+            (b) => b.batchId.toUpperCase() === dispatchBatchId.trim().toUpperCase()
+          );
+          const isSelectedBatchApproved = selectedDispatchBatch?.approvalStatus === 'APPROVED';
 
-          <div>
-            <label htmlFor="disp-pharmacy" className="block text-sm font-medium text-slate-700 mb-1.5">
-              Target Licensed Pharmacy
-            </label>
-            {pharmacies.length > 0 ? (
-              <select
-                id="disp-pharmacy"
-                required
-                value={dispatchPharmacyId}
-                onChange={(e) => setDispatchPharmacyId(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select a registered pharmacy...</option>
-                {pharmacies.map((p) => (
-                  <option key={p.entityId} value={p.entityId}>
-                    {p.entityId} — {p.organizationName} ({p.area})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="disp-pharmacy"
-                type="text"
-                required
-                value={dispatchPharmacyId}
-                onChange={(e) => setDispatchPharmacyId(e.target.value.toUpperCase())}
-                placeholder="No pharmacies registered yet"
-                className={`${inputClass} bg-slate-50 font-mono`}
-              />
-            )}
-          </div>
+          return (
+            <form onSubmit={handleDispatch} className="space-y-4">
+              <div>
+                <label htmlFor="disp-batch" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Production Batch
+                </label>
+                {batches.length > 0 ? (
+                  <select
+                    id="disp-batch"
+                    required
+                    value={dispatchBatchId}
+                    onChange={(e) => setDispatchBatchId(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Select a batch...</option>
+                    {batches.map((b) => (
+                      <option key={b.batchId} value={b.batchId}>
+                        {b.batchId} — {b.medicineName} ({b.remainingQty} pcs left,{' '}
+                        {b.approvalStatus === 'APPROVED' ? 'DGDA Approved' : 'Pending Approval - Cannot Dispatch'})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="disp-batch"
+                    type="text"
+                    required
+                    value={dispatchBatchId}
+                    onChange={(e) => setDispatchBatchId(e.target.value.toUpperCase())}
+                    placeholder="Register a batch first"
+                    className={`${inputClass} bg-slate-50 font-mono`}
+                  />
+                )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="disp-qty" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Dispatch Quantity (pcs)
-              </label>
-              <input
-                id="disp-qty"
-                type="number"
-                min={1}
-                step={1}
-                required
-                value={dispatchQuantity}
-                onChange={(e) => setDispatchQuantity(e.target.value)}
-                placeholder="e.g., 100"
-                className={`${inputClass} font-mono placeholder:font-sans`}
-              />
-            </div>
+                {selectedDispatchBatch && !isSelectedBatchApproved && (
+                  <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                      DGDA Approval Required Before Supply
+                    </p>
+                    <p className="mt-1 text-slate-600">
+                      Batch <span className="font-mono font-semibold">{selectedDispatchBatch.batchId}</span> is currently{' '}
+                      <span className="font-semibold text-amber-800">
+                        {selectedDispatchBatch.approvalStatus || 'PENDING_APPROVAL'}
+                      </span>
+                      . You cannot dispatch or market this batch until DGDA Regulator grants commercial approval.
+                    </p>
+                  </div>
+                )}
+              </div>
 
-            <div>
-              <label htmlFor="disp-date" className="block text-sm font-medium text-slate-700 mb-1.5">
-                Supply Date
-              </label>
-              <input
-                id="disp-date"
-                type="date"
-                required
-                value={supplyDate}
-                onChange={(e) => setSupplyDate(e.target.value)}
-                className={`${inputClass} font-mono`}
-              />
-            </div>
-          </div>
+              <div>
+                <label htmlFor="disp-pharmacy" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Target Licensed Pharmacy
+                </label>
+                {pharmacies.length > 0 ? (
+                  <select
+                    id="disp-pharmacy"
+                    required
+                    value={dispatchPharmacyId}
+                    onChange={(e) => setDispatchPharmacyId(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Select a registered pharmacy...</option>
+                    {pharmacies.map((p) => (
+                      <option key={p.entityId} value={p.entityId}>
+                        {p.entityId} — {p.organizationName} ({p.area})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="disp-pharmacy"
+                    type="text"
+                    required
+                    value={dispatchPharmacyId}
+                    onChange={(e) => setDispatchPharmacyId(e.target.value.toUpperCase())}
+                    placeholder="No pharmacies registered yet"
+                    className={`${inputClass} bg-slate-50 font-mono`}
+                  />
+                )}
+              </div>
 
-          <div className="pt-2 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setDrawerMode(null)}
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              Close
-            </button>
-            <button
-              type="submit"
-              disabled={dispatchLoading || batches.length === 0 || pharmacies.length === 0}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-all"
-            >
-              <Send className="h-4 w-4" aria-hidden="true" />
-              {dispatchLoading ? 'Dispatching...' : 'Dispatch Batch'}
-            </button>
-          </div>
-        </form>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="disp-qty" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Dispatch Quantity (pcs)
+                  </label>
+                  <input
+                    id="disp-qty"
+                    type="number"
+                    min={1}
+                    step={1}
+                    required
+                    value={dispatchQuantity}
+                    onChange={(e) => setDispatchQuantity(e.target.value)}
+                    placeholder="e.g., 100"
+                    className={`${inputClass} font-mono placeholder:font-sans`}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="disp-date" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Supply Date
+                  </label>
+                  <input
+                    id="disp-date"
+                    type="date"
+                    required
+                    value={supplyDate}
+                    onChange={(e) => setSupplyDate(e.target.value)}
+                    className={`${inputClass} font-mono`}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDrawerMode(null)}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    dispatchLoading ||
+                    batches.length === 0 ||
+                    pharmacies.length === 0 ||
+                    !isSelectedBatchApproved
+                  }
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-all"
+                >
+                  <Send className="h-4 w-4" aria-hidden="true" />
+                  {dispatchLoading ? 'Dispatching...' : 'Dispatch Batch'}
+                </button>
+              </div>
+            </form>
+          );
+        })()}
       </SlideOverDrawer>
     </DashboardShell>
   );

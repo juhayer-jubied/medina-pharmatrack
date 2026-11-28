@@ -14,6 +14,7 @@ import { api, getStoredToken, setStoredToken } from './lib/api';
 import type { PublicUser, UserRole } from './lib/pharmaLogic';
 import { AuthPortal } from './components/AuthPortal';
 import { ManufacturerDashboard } from './components/ManufacturerDashboard';
+import { NotificationBell } from './components/NotificationBell';
 import { PharmaAiWidget } from './components/PharmaAiWidget';
 import { PharmacyDashboard } from './components/PharmacyDashboard';
 import { PublicPortal, type PublicTab } from './components/PublicPortal';
@@ -54,6 +55,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [view, setView] = useState<ActiveView>({ kind: 'landing' });
   const [publicTab, setPublicTab] = useState<PublicTab>('verify');
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
     const token = getStoredToken();
@@ -88,12 +90,20 @@ export default function App() {
   }
 
   function openPublicPortal(tab: PublicTab = 'verify') {
+    if (user) {
+      setView({ kind: 'dashboard' });
+      return;
+    }
     setPublicTab(tab);
     setView({ kind: 'public' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function openAuth(mode: 'login' | 'register' = 'login', role?: UserRole) {
+    if (user) {
+      setView({ kind: 'dashboard' });
+      return;
+    }
     setView({ kind: 'auth', mode, role });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -174,7 +184,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={() => setShowSignOutConfirm(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-white/25 bg-white/5 px-3.5 py-2 text-sm font-medium text-white hover:bg-white/15 transition-all whitespace-nowrap"
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -295,115 +305,47 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/60 via-slate-50 to-slate-50 text-slate-900">
-      {/* Sticky Top Header for Public Portal, Auth & Dashboards */}
+      {/* Top Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-md no-print">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 py-3">
-          <button
-            type="button"
-            onClick={() => setView({ kind: 'landing' })}
-            className="inline-flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 rounded-lg"
-          >
-            <MediNaPillLogo size="sm" />
-            <span className="font-display">MediNa</span>
-            <span className="hidden sm:inline text-xs font-medium text-[#0F766E]">
-              PharmaTrack
-            </span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => (user ? setView({ kind: 'dashboard' }) : setView({ kind: 'landing' }))}
+              className="inline-flex items-center gap-2.5 text-base sm:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/20 rounded-lg"
+            >
+              <MediNaPillLogo size="sm" />
+              <span className="font-display">MediNa</span>
+              <span className="hidden sm:inline text-xs font-medium text-[#0F766E]">
+                PharmaTrack
+              </span>
+            </button>
 
-          {view.kind !== 'auth' && (
-            <nav
-              aria-label="Primary navigation"
-              className="hidden lg:flex items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1 text-xs font-medium"
-            >
-            <button
-              type="button"
-              onClick={() => openPublicPortal('verify')}
-              className={`rounded-lg px-3 py-1.5 transition-all whitespace-nowrap shrink-0 ${
-                view.kind === 'public' && publicTab === 'verify'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Verify Authenticity
-            </button>
-            <button
-              type="button"
-              onClick={() => openPublicPortal('stock')}
-              className={`rounded-lg px-3 py-1.5 transition-all whitespace-nowrap shrink-0 ${
-                view.kind === 'public' && publicTab === 'stock'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Search Medicine
-            </button>
-            <button
-              type="button"
-              onClick={() => openPublicPortal('near-me')}
-              className={`rounded-lg px-3 py-1.5 transition-all whitespace-nowrap shrink-0 ${
-                view.kind === 'public' && publicTab === 'near-me'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Pharmacy Near Me
-            </button>
-            <button
-              type="button"
-              onClick={() => openPublicPortal('profiles')}
-              className={`rounded-lg px-3 py-1.5 transition-all whitespace-nowrap shrink-0 ${
-                view.kind === 'public' && publicTab === 'profiles'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Pharmacy Profiles
-            </button>
-            <button
-              type="button"
-              onClick={() => openPublicPortal('report')}
-              className={`rounded-lg px-3 py-1.5 transition-all whitespace-nowrap shrink-0 ${
-                view.kind === 'public' && publicTab === 'report'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Report &amp; Track
-            </button>
             {user && (
-              <button
-                type="button"
-                onClick={() => setView({ kind: 'dashboard' })}
-                className={`rounded-lg px-3 py-1.5 transition-all whitespace-nowrap shrink-0 ${
-                  view.kind === 'dashboard'
-                    ? 'bg-white text-[#0F766E] shadow-xs font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Dashboard
-              </button>
+              <span className="inline-flex items-center rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-[#0F766E] whitespace-nowrap">
+                {user.role} Portal
+              </span>
             )}
-          </nav>
-          )}
+          </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
             {user ? (
               <>
-                {view.kind !== 'dashboard' && (
-                  <button
-                    type="button"
-                    onClick={() => setView({ kind: 'dashboard' })}
-                    className="hidden sm:inline-flex items-center rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2 text-xs font-semibold text-[#0F766E] hover:bg-teal-100 transition-all whitespace-nowrap"
-                  >
-                    Dashboard
-                  </button>
+                <div className="hidden md:flex items-center gap-2 border-r border-slate-200 pr-3 mr-1 text-xs text-slate-500">
+                  <span className="font-medium text-slate-900 truncate max-w-[200px]">
+                    {user.organizationName}
+                  </span>
+                  <span className="font-mono text-slate-400">({user.entityId})</span>
+                </div>
+                {(user.role === 'Company' || user.role === 'Pharmacy') && (
+                  <NotificationBell user={user} />
                 )}
                 <button
                   type="button"
-                  onClick={handleLogout}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all whitespace-nowrap shrink-0"
+                  onClick={() => setShowSignOutConfirm(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all whitespace-nowrap shrink-0 shadow-2xs"
                 >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  <LogOut className="h-4 w-4 text-slate-500" aria-hidden="true" />
                   <span>Sign Out</span>
                 </button>
               </>
@@ -417,54 +359,24 @@ export default function App() {
                 <span>Back</span>
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => openAuth('login')}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#0F766E] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-[#115E59] focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all whitespace-nowrap shrink-0"
-              >
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                <span>Login</span>
-              </button>
+              <>
+                <NotificationBell user={null} />
+                <button
+                  type="button"
+                  onClick={() => openAuth('login')}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0F766E] px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-[#115E59] focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all whitespace-nowrap shrink-0"
+                >
+                  <LogIn className="h-4 w-4" aria-hidden="true" />
+                  <span>Login</span>
+                </button>
+              </>
             )}
           </div>
         </div>
-
-        {user && (
-          <div className="flex lg:hidden items-center justify-center gap-2 border-t border-slate-200/70 bg-slate-50/90 px-4 py-1.5 text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => setView({ kind: 'dashboard' })}
-              className={`rounded-lg px-3 py-1 transition-colors ${
-                view.kind === 'dashboard'
-                  ? 'bg-white text-[#0F766E] font-semibold shadow-2xs'
-                  : 'text-slate-600'
-              }`}
-            >
-              Dashboard ({user.role})
-            </button>
-            <button
-              type="button"
-              onClick={() => openPublicPortal('verify')}
-              className={`rounded-lg px-3 py-1 transition-colors ${
-                view.kind === 'public'
-                  ? 'bg-white text-[#0F766E] font-semibold shadow-2xs'
-                  : 'text-slate-600'
-              }`}
-            >
-              Public Portal
-            </button>
-          </div>
-        )}
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6 py-8 sm:py-10">
-        {view.kind === 'auth' ? (
-          <AuthPortal
-            initialMode={view.mode}
-            initialRole={view.role}
-            onAuthenticated={handleAuthenticated}
-          />
-        ) : view.kind === 'dashboard' && user ? (
+        {user ? (
           user.role === 'Company' ? (
             <ManufacturerDashboard user={user} />
           ) : user.role === 'Pharmacy' ? (
@@ -472,6 +384,12 @@ export default function App() {
           ) : (
             <RegulatorDashboard user={user} />
           )
+        ) : view.kind === 'auth' ? (
+          <AuthPortal
+            initialMode={view.mode}
+            initialRole={view.role}
+            onAuthenticated={handleAuthenticated}
+          />
         ) : (
           <PublicPortal
             activeTab={publicTab}
@@ -483,26 +401,96 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white/80 backdrop-blur-xs no-print">
-        <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-6 pt-4 pb-20 sm:py-5 sm:pr-44 text-xs text-slate-500">
-          <span>MediNa - PharmaTrack · Pharmaceutical Supply Chain &amp; DGDA Compliance</span>
-          <div className="flex items-center gap-5">
+        {user ? (
+          <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-6 py-4 text-xs text-slate-500">
+            <span className="font-medium text-slate-600">
+              MediNa - PharmaTrack · Authenticated {user.role} Console ({user.organizationName} · {user.entityId})
+            </span>
             <button
               type="button"
-              onClick={() => openAuth('register')}
-              className="hover:text-slate-900 transition-colors"
+              onClick={() => setShowSignOutConfirm(true)}
+              className="inline-flex items-center gap-1.5 font-medium text-slate-600 hover:text-slate-900 transition-colors"
             >
-              Organization Registration
-            </button>
-            <button
-              type="button"
-              onClick={() => openPublicPortal('report')}
-              className="hover:text-slate-900 transition-colors"
-            >
-              Report Counterfeit
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              Sign Out
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-6 pt-4 pb-20 sm:py-5 sm:pr-44 text-xs text-slate-500">
+            <span>MediNa - PharmaTrack · Pharmaceutical Supply Chain &amp; DGDA Compliance</span>
+            <div className="flex items-center gap-5">
+              <button
+                type="button"
+                onClick={() => openAuth('register')}
+                className="hover:text-slate-900 transition-colors"
+              >
+                Organization Registration
+              </button>
+              <button
+                type="button"
+                onClick={() => openPublicPortal('report')}
+                className="hover:text-slate-900 transition-colors"
+              >
+                Report Counterfeit
+              </button>
+            </div>
+          </div>
+        )}
       </footer>
+
+      {/* Sign Out Confirmation Modal */}
+      {showSignOutConfirm && user && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="signout-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition-all">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
+                <LogOut className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div className="flex-1">
+                <h3
+                  id="signout-dialog-title"
+                  className="text-lg font-semibold tracking-tight text-slate-900"
+                >
+                  Confirm Sign Out
+                </h3>
+                <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                  Are you sure you want to sign out?
+                </p>
+                <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2 text-xs text-slate-600">
+                  <span className="font-medium text-slate-900">{user.organizationName}</span>{' '}
+                  <span className="text-slate-400">({user.role} · {user.entityId})</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSignOutConfirm(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSignOutConfirm(false);
+                  handleLogout();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-rose-700 transition-colors"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                Yes, Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <PharmaAiWidget />
     </div>

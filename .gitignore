@@ -7,8 +7,3 @@ coverage/
 .env*
 !.env.example
 .data/
-node_modules
-.env
-.env.local
-.data
-dist

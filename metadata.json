@@ -1,6 +1,0 @@
-{
-  "name": "MediNa - PharmaTrack",
-  "description": "Enterprise pharmaceutical supply chain traceability, batch verification, and DGDA regulatory compliance platform.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

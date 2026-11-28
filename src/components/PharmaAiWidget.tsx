@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Bot, Send, X } from 'lucide-react';
+import { Bot, RotateCcw, Send, X } from 'lucide-react';
 import { api } from '../lib/api';
 import type { BatchStatus } from '../lib/pharmaLogic';
 import { BatchStatusBadge } from './StatusBadge';
@@ -20,27 +20,59 @@ interface ChatMessage {
   isError?: boolean;
 }
 
+const STORAGE_KEY = 'medina_ai_chat_history_v1';
+
+const WELCOME_MESSAGE: ChatMessage = {
+  id: 'welcome',
+  role: 'assistant',
+  text:
+    'Assalamu Alaikum & Welcome to MediNa AI — your intelligent Pharmaceutical Traceability & Health Guidance Assistant. 🩺\nHow can I assist you today?\n\n[ Note: I provide primary pharmaceutical guidance only. Please consult a licensed doctor for prescriptions or emergencies. ]',
+};
+
 export function PharmaAiWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      text:
-        'Assalamu Alaikum & Welcome to MediNa AI — your intelligent Pharmaceutical Traceability & Health Guidance Assistant. 🩺\nHow can I assist you today?\n\n[ Note: I provide primary pharmaceutical guidance only. Please consult a licensed doctor for prescriptions or emergencies. ]',
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+    return [WELCOME_MESSAGE];
+  });
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, open, loading]);
+
+  function handleClearChat() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore storage access errors
+    }
+    setMessages([WELCOME_MESSAGE]);
+  }
 
   async function sendMessage(text: string) {
     const trimmed = text.trim();
@@ -92,7 +124,7 @@ export function PharmaAiWidget() {
   }
 
   function prefillBatchCheck() {
-    setInput('Verify Batch CPA-G1-P01A-1028');
+    setInput('Verify Batch CPA-ATB-P001-1028');
     inputRef.current?.focus();
   }
 
@@ -116,14 +148,27 @@ export function PharmaAiWidget() {
                 <p className="text-xs text-slate-500">Batch &amp; DGDA Compliance Guide</p>
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="Close MediNa AI"
-              onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
+            <div className="flex items-center gap-1">
+              {messages.length > 1 && (
+                <button
+                  type="button"
+                  title="Clear chat history"
+                  aria-label="Clear chat history"
+                  onClick={handleClearChat}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Close MediNa AI"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
           {/* Messages */}
@@ -240,7 +285,7 @@ export function PharmaAiWidget() {
           </form>
         </section>
       ) : (
-          <button
+        <button
           type="button"
           onClick={() => setOpen(true)}
           className="inline-flex items-center gap-2 rounded-full bg-[#0F766E] px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-[#115E59] hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all whitespace-nowrap"

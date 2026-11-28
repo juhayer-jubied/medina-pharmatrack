@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import type {
   ComplaintRecord,
+  NotificationRecord,
   PharmacyArea,
   ProductionBatch,
   PublicUser,
@@ -20,6 +21,7 @@ export interface PharmaStore {
   supplies: SupplyDispatch[];
   sales: SaleRecord[];
   complaints: ComplaintRecord[];
+  notifications: NotificationRecord[];
 }
 
 // ==================== MONGODB ATLAS SETUP & IN-MEMORY CACHE ====================
@@ -31,6 +33,7 @@ const storeSchema = new mongoose.Schema(
     supplies: { type: Array, default: [] },
     sales: { type: Array, default: [] },
     complaints: { type: Array, default: [] },
+    notifications: { type: Array, default: [] },
   },
   { minimize: false }
 );
@@ -44,6 +47,7 @@ let cachedStore: PharmaStore = {
   supplies: [],
   sales: [],
   complaints: [],
+  notifications: [],
 };
 
 export async function initMongoDB(): Promise<void> {
@@ -56,7 +60,7 @@ export async function initMongoDB(): Promise<void> {
     await mongoose.connect(uri, { dbName: 'medina_pharmatrack' });
     console.log('✅ Connected to MongoDB Atlas (medina_pharmatrack)');
 
-    let doc = await StoreModel.findOne({ key: 'main_registry' }).lean();
+    const doc = await StoreModel.findOne({ key: 'main_registry' }).lean();
     if (!doc) {
       await StoreModel.create({ key: 'main_registry', ...cachedStore });
     } else {
@@ -66,6 +70,9 @@ export async function initMongoDB(): Promise<void> {
         supplies: Array.isArray(doc.supplies) ? (doc.supplies as SupplyDispatch[]) : [],
         sales: Array.isArray(doc.sales) ? (doc.sales as SaleRecord[]) : [],
         complaints: Array.isArray(doc.complaints) ? (doc.complaints as ComplaintRecord[]) : [],
+        notifications: Array.isArray(doc.notifications)
+          ? (doc.notifications as NotificationRecord[])
+          : [],
       };
     }
   } catch (err) {
@@ -80,6 +87,7 @@ export function createEmptyStore(): PharmaStore {
     supplies: [],
     sales: [],
     complaints: [],
+    notifications: [],
   };
 }
 
@@ -99,6 +107,7 @@ export function saveStore(store: PharmaStore): void {
           supplies: store.supplies,
           sales: store.sales,
           complaints: store.complaints,
+          notifications: store.notifications,
         },
       },
       { upsert: true }
@@ -179,19 +188,9 @@ export function verifySessionToken(token: string): SessionPayload | null {
 }
 
 export function toPublicUser(user: StoredUser): PublicUser {
-  const result: PublicUser = {
-    id: user.id,
-    organizationName: user.organizationName,
-    username: user.username,
-    role: user.role,
-    entityId: user.entityId,
-    createdAt: user.createdAt,
+  const { passwordHash: _ignored, ...publicFields } = user;
+  return {
+    ...publicFields,
+    ...(publicFields.area ? { area: publicFields.area as PharmacyArea } : {}),
   };
-  if (user.companyPrefix) result.companyPrefix = user.companyPrefix;
-  if (user.ownerName) result.ownerName = user.ownerName;
-  if (user.area) result.area = user.area as PharmacyArea;
-  if (user.address) result.address = user.address;
-  if (user.contact) result.contact = user.contact;
-  if (user.googleMapsUrl) result.googleMapsUrl = user.googleMapsUrl;
-  return result;
 }

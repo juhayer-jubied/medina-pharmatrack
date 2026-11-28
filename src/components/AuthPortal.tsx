@@ -52,10 +52,13 @@ export function AuthPortal({
   initialRole = 'Company',
   onAuthenticated,
 }: AuthPortalProps) {
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
+  const [mode, setMode] = useState<'login' | 'register'>(
+    initialRole === 'DGDA Regulator' ? 'login' : initialMode
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [registrationNotice, setRegistrationNotice] = useState<string | null>(null);
 
   // Login state (completely empty - zero prefilled credentials)
   const [loginUsername, setLoginUsername] = useState('');
@@ -73,6 +76,8 @@ export function AuthPortal({
   const [contact, setContact] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
 
+  const isRegulator = selectedRole === 'DGDA Regulator';
+
   const batchCodePreview =
     selectedRole === 'Company' && entityId.trim()
       ? resolveCompanyBatchCodes(entityId, 1, companyPrefix || undefined)
@@ -84,7 +89,9 @@ export function AuthPortal({
     setLoading(true);
     try {
       const { user, token } = await api.login(loginUsername, loginPassword, selectedRole);
-      setStoredToken(token);
+      if (token) {
+        setStoredToken(token);
+      }
       onAuthenticated(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in.');
@@ -96,9 +103,10 @@ export function AuthPortal({
   async function handleRegisterSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setRegistrationNotice(null);
     setLoading(true);
     try {
-      const { user, token } = await api.register({
+      const res = await api.register({
         organizationName,
         username,
         password,
@@ -117,8 +125,20 @@ export function AuthPortal({
             }
           : {}),
       });
-      setStoredToken(token);
-      onAuthenticated(user);
+
+      if (res.requiresApproval || !res.token) {
+        setRegistrationNotice(
+          res.message ||
+            'Registration submitted successfully! Your pharmacy license is now awaiting DGDA regulatory verification before you can sign in.'
+        );
+        setMode('login');
+        setLoginUsername(username);
+        setLoginPassword('');
+        return;
+      }
+
+      setStoredToken(res.token);
+      onAuthenticated(res.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed.');
     } finally {
@@ -168,6 +188,9 @@ export function AuthPortal({
                   aria-checked={active}
                   onClick={() => {
                     setSelectedRole(item.role);
+                    if (item.role === 'DGDA Regulator') {
+                      setMode('login');
+                    }
                     setError(null);
                   }}
                   className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all ${
@@ -198,45 +221,68 @@ export function AuthPortal({
           </div>
         </div>
 
-        {/* Step 2: Sign In / Register Switch */}
-        <div
-          role="tablist"
-          aria-label="Authentication mode"
-          className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'login'}
-            onClick={() => {
-              setMode('login');
-              setError(null);
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
-              mode === 'login'
-                ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+        {/* Step 2: Sign In / Register Switch (Hidden for DGDA Regulator) */}
+        {isRegulator ? (
+          <div className="mb-6 rounded-xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-xs text-slate-600 flex items-center gap-2.5">
+            <Lock className="h-4 w-4 shrink-0 text-[#0F766E]" aria-hidden="true" />
+            <span>
+              Public registration is restricted for <strong>DGDA Regulator</strong>. Sign in using
+              official DGDA regulatory credentials.
+            </span>
+          </div>
+        ) : (
+          <div
+            role="tablist"
+            aria-label="Authentication mode"
+            className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1"
           >
-            Sign In ({selectedRole})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'register'}
-            onClick={() => {
-              setMode('register');
-              setError(null);
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
-              mode === 'register'
-                ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'login'}
+              onClick={() => {
+                setMode('login');
+                setError(null);
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                mode === 'login'
+                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'register'}
+              onClick={() => {
+                setMode('register');
+                setError(null);
+              }}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                mode === 'register'
+                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Register Account
+            </button>
+          </div>
+        )}
+
+        {registrationNotice && (
+          <div
+            role="status"
+            className="mb-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-[#0F766E] flex items-start gap-2.5"
           >
-            Register Account
-          </button>
-        </div>
+            <ShieldCheck className="h-5 w-5 shrink-0 text-[#0F766E] mt-0.5" aria-hidden="true" />
+            <div>
+              <div className="font-semibold text-slate-900">Registration Notice</div>
+              <p className="mt-0.5 text-xs text-slate-600 leading-relaxed">{registrationNotice}</p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div
@@ -247,7 +293,7 @@ export function AuthPortal({
           </div>
         )}
 
-        {mode === 'login' ? (
+        {mode === 'login' || isRegulator ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label
@@ -293,7 +339,7 @@ export function AuthPortal({
               className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0F766E] px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-[#115E59] focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 transition-all"
             >
               <Lock className="h-4 w-4" aria-hidden="true" />
-              {loading ? 'Signing In...' : `Sign In to ${selectedRole} Portal`}
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
         ) : (
@@ -303,11 +349,7 @@ export function AuthPortal({
                 htmlFor="reg-org-name"
                 className="block text-sm font-medium text-slate-700 mb-1.5"
               >
-                {selectedRole === 'Pharmacy'
-                  ? 'Pharmacy Name'
-                  : selectedRole === 'Company'
-                  ? 'Company Name'
-                  : 'Official Name / Division'}
+                {selectedRole === 'Pharmacy' ? 'Pharmacy Name' : 'Company Name'}
               </label>
               <input
                 id="reg-org-name"
@@ -318,9 +360,7 @@ export function AuthPortal({
                 placeholder={
                   selectedRole === 'Company'
                     ? 'e.g., Square Pharmaceuticals Ltd.'
-                    : selectedRole === 'Pharmacy'
-                    ? 'e.g., Daffodil Care Pharmacy'
-                    : 'e.g., DGDA Regulatory Authority'
+                    : 'e.g., Daffodil Care Pharmacy'
                 }
                 className={inputClass}
               />
@@ -332,11 +372,7 @@ export function AuthPortal({
                   htmlFor="reg-entity-id"
                   className="block text-sm font-medium text-slate-700 mb-1.5"
                 >
-                  {selectedRole === 'Company'
-                    ? 'Company Entity ID'
-                    : selectedRole === 'Pharmacy'
-                    ? 'Pharmacy License ID'
-                    : 'Regulator ID'}
+                  {selectedRole === 'Company' ? 'Company Entity ID' : 'Pharmacy License ID'}
                 </label>
                 <input
                   id="reg-entity-id"
@@ -344,13 +380,7 @@ export function AuthPortal({
                   required
                   value={entityId}
                   onChange={(e) => setEntityId(e.target.value.toUpperCase())}
-                  placeholder={
-                    selectedRole === 'Company'
-                      ? 'e.g., 1 or 2'
-                      : selectedRole === 'Pharmacy'
-                      ? 'e.g., DSC_01'
-                      : 'e.g., DGDA-01'
-                  }
+                  placeholder={selectedRole === 'Company' ? 'e.g., 1 or 2' : 'e.g., DSC_01'}
                   className={`${inputClass} font-mono placeholder:font-sans`}
                 />
               </div>
@@ -398,7 +428,7 @@ export function AuthPortal({
                   <p className="mt-1.5 text-xs text-slate-500">
                     Generated batch format preview:{' '}
                     <span className="font-mono font-semibold text-[#0F766E]">
-                      {batchCodePreview.compPrefix}-G1-P01{batchCodePreview.companySuffix}-1028
+                      {batchCodePreview.compPrefix}-ATB-P001{batchCodePreview.companySuffix}-1028
                     </span>{' '}
                     · Supply ID:{' '}
                     <span className="font-mono font-semibold text-[#0F766E]">

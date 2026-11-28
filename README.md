@@ -15,6 +15,6 @@ View your app in AI Studio: https://ai.studio/apps/01ef77e3-c404-4760-9dd9-691cc
 
 1. Install dependencies:
    `npm install`
-2. Set `MONGODB_URI`, `GROQ_API_KEY`, and `JWT_SECRET` in `.env`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`

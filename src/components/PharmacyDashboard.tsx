@@ -438,7 +438,7 @@ export function PharmacyDashboard({ user }: PharmacyDashboardProps) {
                 setPosBatchId(e.target.value.toUpperCase());
                 setPosError(null);
               }}
-              placeholder="Enter or select CPA-G1-P01A-1028"
+              placeholder="Enter or select CPA-ATB-P001-1028"
               className={`${inputClass} font-mono placeholder:font-sans`}
             />
             <datalist id="pharmacy-batch-options">

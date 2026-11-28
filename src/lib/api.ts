@@ -1,9 +1,14 @@
 import type {
+  BatchApprovalStatus,
   BatchStatus,
   ComplaintIssueType,
   ComplaintRecord,
   ComplaintStatus,
   DrugGroup,
+  NotificationCategory,
+  NotificationRecord,
+  NotificationTargetType,
+  PharmacyApprovalStatus,
   PharmacyArea,
   PublicUser,
   SaleRecord,
@@ -64,7 +69,9 @@ async function apiRequest<T>(
 
 export interface AuthResponse {
   user: PublicUser;
-  token: string;
+  token?: string;
+  requiresApproval?: boolean;
+  message?: string;
 }
 
 export interface RegisterPayload {
@@ -97,6 +104,10 @@ export interface BatchVerificationResult {
     expiryDate: string;
     isRecalled: boolean;
     recallReason?: string;
+    approvalStatus?: BatchApprovalStatus;
+    approvalRemarks?: string;
+    approvedBy?: string;
+    approvedAt?: string;
   };
   pharmacyVerification?: {
     pharmacyId: string;
@@ -151,6 +162,10 @@ export interface ManufacturerBatchView {
   expiryDate: string;
   isRecalled: boolean;
   recallReason?: string;
+  approvalStatus: BatchApprovalStatus;
+  approvalRemarks?: string;
+  approvedBy?: string;
+  approvedAt?: string;
   status: BatchStatus;
   dispatchedQty: number;
   remainingQty: number;
@@ -174,6 +189,7 @@ export interface PharmacyInventoryItem {
   status: BatchStatus;
   isRecalled: boolean;
   recallReason?: string;
+  approvalStatus?: BatchApprovalStatus;
   receivedQty: number;
   soldQty: number;
   remainingStock: number;
@@ -194,16 +210,49 @@ export interface RegulatorBatchView {
   recallReason?: string;
   recalledBy?: string;
   recalledAt?: string;
+  approvalStatus: BatchApprovalStatus;
+  approvalRemarks?: string;
+  approvedBy?: string;
+  approvedAt?: string;
   status: BatchStatus;
   dispatchedQty: number;
   soldQty: number;
   createdAt: string;
 }
 
+export interface RegulatorCompanyView {
+  id: string;
+  entityId: string;
+  organizationName: string;
+  username: string;
+}
+
+export interface RegulatorPharmacyView {
+  id: string;
+  entityId: string;
+  organizationName: string;
+  ownerName: string;
+  area: string;
+  address: string;
+  contact: string;
+  googleMapsUrl?: string;
+  approvalStatus: PharmacyApprovalStatus;
+  approvalRemarks?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdAt: string;
+}
+
 export interface RegulatorSummary {
   totalBatches: number;
+  pendingApprovals: number;
+  approvedBatches: number;
+  rejectedBatches: number;
   recalledBatches: number;
   pendingComplaints: number;
+  pendingPharmacyApprovals: number;
+  approvedPharmacies: number;
+  rejectedPharmacies: number;
   registeredManufacturers: number;
   registeredPharmacies: number;
 }
@@ -224,13 +273,24 @@ export const api = {
   me() {
     return apiRequest<{ user: PublicUser }>('/api/auth/me');
   },
+  getNotifications() {
+    return apiRequest<{ notifications: NotificationRecord[] }>('/api/notifications');
+  },
+  markNotificationsRead(notificationId?: string) {
+    return apiRequest<{ ok: boolean }>('/api/notifications/read', {
+      method: 'POST',
+      body: JSON.stringify(notificationId ? { notificationId } : {}),
+    });
+  },
   verifyBatch(batchId: string, pharmacyId?: string) {
     const params = new URLSearchParams({ batchId });
     if (pharmacyId) params.set('pharmacyId', pharmacyId);
     return apiRequest<BatchVerificationResult>(`/api/public/verify?${params.toString()}`);
   },
-  getPublicStock(drugGroup: string = 'All') {
-    const params = new URLSearchParams({ drugGroup });
+  getPublicStock(drugGroup: string = 'All', medicineName: string = '') {
+    const params = new URLSearchParams();
+    if (drugGroup) params.set('drugGroup', drugGroup);
+    if (medicineName.trim()) params.set('medicineName', medicineName.trim());
     return apiRequest<{ items: PublicStockItem[] }>(`/api/public/stock?${params.toString()}`);
   },
   getPublicPharmacies(area: string = 'All') {
@@ -310,9 +370,24 @@ export const api = {
   getRegulatorDashboard() {
     return apiRequest<{
       batches: RegulatorBatchView[];
+      companies: RegulatorCompanyView[];
+      pharmacies: RegulatorPharmacyView[];
       complaints: ComplaintRecord[];
+      notifications: NotificationRecord[];
       summary: RegulatorSummary;
     }>('/api/regulator/dashboard');
+  },
+  sendRegulatorNotification(payload: {
+    title: string;
+    message: string;
+    category: NotificationCategory;
+    targetType: NotificationTargetType;
+    targetEntityId?: string;
+  }) {
+    return apiRequest<{ notification: NotificationRecord }>('/api/regulator/notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
   toggleBatchRecall(batchId: string, recall: boolean, recallReason?: string) {
     return apiRequest<{ batch: RegulatorBatchView }>(
@@ -320,6 +395,32 @@ export const api = {
       {
         method: 'POST',
         body: JSON.stringify({ recall, recallReason }),
+      }
+    );
+  },
+  updateBatchApproval(
+    batchId: string,
+    approvalStatus: 'APPROVED' | 'REJECTED',
+    remarks?: string
+  ) {
+    return apiRequest<{ batch: RegulatorBatchView }>(
+      `/api/regulator/batches/${encodeURIComponent(batchId)}/approval`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ approvalStatus, remarks }),
+      }
+    );
+  },
+  updatePharmacyApproval(
+    entityId: string,
+    approvalStatus: 'APPROVED' | 'REJECTED',
+    remarks?: string
+  ) {
+    return apiRequest<{ pharmacy: RegulatorPharmacyView }>(
+      `/api/regulator/pharmacies/${encodeURIComponent(entityId)}/approval`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ approvalStatus, remarks }),
       }
     );
   },
